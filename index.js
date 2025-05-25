@@ -12,6 +12,8 @@ const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 const path = require('path'); // Added path module
 const config = require('./set'); // Import config from set.js
+const { incrementUserActivity, getUserStats } = require('./bdd/user_rank_data.js'); // Added for User Rank System
+const { get_level_exp } = require('./lib/rank_utils.js'); // Added for User Rank System
 
 const logger = pino({ level: 'info' });
 // const SESSION_FILE_PATH = config.SESSION_ID ? 'session.json' : 'baileys_auth_info'; // Commented out, dynamic logic below
@@ -184,6 +186,7 @@ async function connectToWhatsApp() {
             }
 
             for (const ms of update.messages) {
+                let isCmd = false; // Initialize isCmd for each message
                 try { // Individual message processing try-catch
                     if (!ms.message) {
                         logger.info('Message with no content, skipping:', ms.key);
@@ -278,6 +281,7 @@ async function connectToWhatsApp() {
                         const cmd = global.commands.get(commandName);
 
                         if (cmd) {
+                            isCmd = true; // Set isCmd to true if a command is matched
                             logger.info({
                                 command: cmd.nomCom, // Log the actual command name
                                 aliasUsed: commandName,
@@ -345,6 +349,35 @@ async function connectToWhatsApp() {
                             // No "command not found" message to keep chat clean, unless explicitly desired
                         }
                     }
+
+                    // User Rank System: XP increment and level-up check for non-command group messages
+                    if (messageContext.isGroupMsg && !isCmd && messageContext.messageContent) { // Also ensure there's content
+                        const groupId = messageContext.groupId;
+                        const userId = messageContext.userId;
+
+                        try {
+                            const oldStats = await getUserStats(groupId, userId);
+                            const oldLevelData = get_level_exp(oldStats.xp);
+
+                            await incrementUserActivity(groupId, userId, config.XP_PER_MESSAGE || 10); // Use config or default
+
+                            const newStats = await getUserStats(groupId, userId);
+                            const newLevelData = get_level_exp(newStats.xp);
+
+                            if (newLevelData.level > oldLevelData.level) {
+                                const levelUpMessage = `🎉 LEVEL UP! 🎉\n\nCongratulations @${userId.split('@')[0]}!\nYou have reached Level ${newLevelData.level} - ${newLevelData.role}!\n\nPrevious Level: ${oldLevelData.level} - ${oldLevelData.role}\nNew XP: ${newStats.xp}`;
+                                
+                                await sock.sendMessage(groupId, { 
+                                    text: levelUpMessage, 
+                                    mentions: [userId] 
+                                });
+                                logger.info({ userId, groupId, oldLevel: oldLevelData.level, newLevel: newLevelData.level, newXP: newStats.xp }, 'User leveled up');
+                            }
+                        } catch (rankErr) {
+                            logger.error({ err: rankErr, stack: rankErr.stack, userId, groupId }, 'Error in User Rank System processing');
+                        }
+                    }
+
                 } catch (msgErr) {
                     logger.error({ err: msgErr, stack: msgErr.stack, msgKey: ms.key?.id || 'unknown' }, 'Error processing individual message in messages.upsert');
                 }
