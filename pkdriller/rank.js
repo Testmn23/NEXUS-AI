@@ -1,6 +1,6 @@
 
 const {zokou} = require("../framework/zokou");
-const {getMessagesAndXPByJID,getBottom10Users} = require("../bdd/level");
+const {getUserStats, getTopUsers, setUserXP, addUserXP, resetUserRank } = require("../bdd/user_rank_bdd.js"); // Updated import with new functions
 
 
 function get_level_exp(xp) {
@@ -54,27 +54,80 @@ function get_level_exp(xp) {
         { level: 47, xpThreshold: 1185000},
         { level: 48, xpThreshold: 1240000},
         { level: 49, xpThreshold: 1295000},
-        { level: 'Zk-GOD', xpThreshold: 2000000}
+        { level: 50, xpThreshold: 2000000} // Changed 'Zk-GOD' to 50 for consistency
     ];
 
-    let level = 0;
-    let exp = xp;
-    let xplimit = levelThresholds[level].xpThreshold;
+    let currentLevel = 0;
+    let currentXpInLevel = xp;
+    let nextLevelXp = levelThresholds[0].xpThreshold;
+    let previousLevelXpThreshold = 0;
 
     for (let i = 0; i < levelThresholds.length; i++) {
         if (xp >= levelThresholds[i].xpThreshold) {
-            level = levelThresholds[i].level;
-            xplimit = levelThresholds[i + 1]?.xpThreshold || 'No-limit';
-            exp = xp - levelThresholds[i].xpThreshold;
+            currentLevel = levelThresholds[i].level;
+            previousLevelXpThreshold = levelThresholds[i].xpThreshold;
+            if (levelThresholds[i + 1]) {
+                nextLevelXp = levelThresholds[i + 1].xpThreshold;
+                currentXpInLevel = xp - levelThresholds[i].xpThreshold;
+            } else {
+                // Max level reached or beyond
+                nextLevelXp = Infinity; // Or some indicator for max level
+                currentXpInLevel = xp - levelThresholds[i].xpThreshold; 
+            }
         } else {
-            break;
+            // This case means the user's XP is less than the first threshold, or between thresholds
+            // If currentLevel is still 0, it means XP < levelThresholds[0].xpThreshold
+            if (currentLevel === 0) {
+                 nextLevelXp = levelThresholds[0].xpThreshold;
+                 currentXpInLevel = xp; // Total XP is XP in current (level 0)
+            } else {
+                 // This else block might not be strictly necessary with the current loop structure
+                 // but ensures currentXpInLevel is relative to the current level's threshold
+                 currentXpInLevel = xp - previousLevelXpThreshold;
+            }
+            break; 
         }
+    }
+    
+    // If XP is less than the first threshold, currentLevel remains 0
+    // currentXpInLevel is totalXP, nextLevelXp is the first threshold.
+    if (xp < levelThresholds[0].xpThreshold) {
+        currentLevel = 0;
+        currentXpInLevel = xp;
+        nextLevelXp = levelThresholds[0].xpThreshold;
+    }
+
+
+    let roleName;
+    if (currentLevel < 5) {
+        roleName = 'Newborn';
+    } else if (currentLevel >= 5 && currentLevel < 10) {
+        roleName = 'Kid Ninja';
+    } else if (currentLevel >= 10 && currentLevel < 15) {
+        roleName = 'Genin Ninja';
+    } else if (currentLevel >= 15 && currentLevel < 20) {
+        roleName = 'Chunin Ninja';
+    } else if (currentLevel >= 20 && currentLevel < 25) {
+        roleName = 'Jonin Ninja';
+    } else if (currentLevel >= 25 && currentLevel < 30) {
+        roleName = 'ANBU';
+    } else if (currentLevel >= 30 && currentLevel < 35) {
+        roleName = 'Strong Ninja';
+    } else if (currentLevel >= 35 && currentLevel < 40) {
+        roleName = 'Kage';
+    } else if (currentLevel >= 40 && currentLevel < 45) {
+        roleName = 'Hermit Seinin';
+    } else if (currentLevel >= 45 && currentLevel < 50) {
+        roleName = 'Otsutsuki';
+    } else { // currentLevel >= 50
+        roleName = 'Divinity'; // Changed from GOD/level-GOD
     }
 
     return {
-        level: level,
-        xplimit: xplimit,
-        exp: exp
+        level: currentLevel,
+        xplimit: nextLevelXp,
+        exp: currentXpInLevel,
+        role: roleName
     };
 }
 
@@ -88,15 +141,18 @@ zokou( {
    }, 
    async(dest,zk, commandeOptions)=> {
   
-    const {ms , repondre,auteurMessage,nomAuteurMessage, msgRepondu , auteurMsgRepondu , mybotpic} = commandeOptions ;
+    const {ms , repondre,auteurMessage,nomAuteurMessage, msgRepondu , auteurMsgRepondu , mybotpic, verifGroupe} = commandeOptions ; // Added verifGroupe
 
   if (msgRepondu) {
       
        try {
           
-        let rank = await getMessagesAndXPByJID(auteurMsgRepondu) ;
+        if (!verifGroupe) { // Ensure command is used in a group if needed by getUserStats
+            repondre("This command must be used in a group to check rank."); return;
+        }
+        let userStats = await getUserStats(dest, auteurMsgRepondu) ;
 
-        const data = await get_level_exp(rank.xp)
+        const data = get_level_exp(userStats.xp) // get_level_exp is not async
          let ppuser ;
     
          
@@ -107,45 +163,20 @@ zokou( {
          } ;
     
     
-         let role ;
-    
-         if (data.level < 5) {
-            role = 'baby'
-         } else if (data.level >= 5 && data.level < 10) {
-            role = 'kid-Ninja'
-         } else if ( data.level >= 10 && data.level < 15 ) {
-            role = 'Ninja-genin'
-         } else if ( data.level >= 15 && data.level < 20 ) {
-            role = 'Ninja-chunin'
-         } else if ( data.level >= 20 && data.level < 25 ) {
-            role = 'Ninja-jonin'
-         } else if ( data.level >= 25 && data.level < 30 ) {
-            role = 'ANBU'
-         } else if ( data.level >= 30 && data.level < 35 ) {
-            role = 'strong ninja'
-         } else if ( data.level >= 35 && data.level < 40 ) {
-            role = 'kage'
-         } else if ( data.level >= 40 && data.level < 45 ) {
-            role = 'Hermit seinin'
-         } else if ( data.level >= 45 && data.level < 50 ) {
-            role = 'Otsusuki'
-         } else {
-            role = 'GOD'
-         }
-    
+         // Role is now directly from data.role
     
          let msg = `
-┏━━━┛ NEXUS-AI┗━━━┓
+┏━━━┛ NEXUS-AI Rank ┗━━━┓
          
     *Name :* @${auteurMsgRepondu.split("@")[0]}
     
     *Level :* ${data.level}
     
-    *EXP :* ${data.exp}/${data.xplimit}
-    
-    *Role :* ${role}
+    *Role :* ${data.role}
 
-    *Messages :* ${rank.messages}
+    *EXP :* ${data.exp} / ${data.xplimit === Infinity ? 'Max' : data.xplimit}
+    
+    *Messages (in this group) :* ${userStats.messages}
     
    ┕━✿━┑  ┍━✿━┙`
     
@@ -167,12 +198,14 @@ zokou( {
 
 
       try {
-        
+        if (!verifGroupe) { // Ensure command is used in a group
+            repondre("This command must be used in a group to check your rank."); return;
+        }
         let jid = auteurMessage ;
           
-        let rang = await getMessagesAndXPByJID(jid) ;
+        let userStats = await getUserStats(dest, jid) ;
 
-        const data =  get_level_exp(rang.xp)
+        const data =  get_level_exp(userStats.xp) // get_level_exp is not async
          let ppuser ;
     
          
@@ -183,45 +216,20 @@ zokou( {
          } ;
     
     
-         let role ;
-    
-         if (data.level < 5) {
-            role = 'Nouveau né(e)'
-         } else if (data.level >= 5 && data.level < 10) {
-            role = 'kid-Ninja'
-         } else if ( data.level >= 10 && data.level < 15 ) {
-            role = 'Ninja-genin'
-         } else if ( data.level >= 15 && data.level < 20 ) {
-            role = 'Ninja-chunin'
-         } else if ( data.level >= 20 && data.level < 25 ) {
-            role = 'Ninja-jonin'
-         } else if ( data.level >= 25 && data.level < 30 ) {
-            role = 'ANBU'
-         } else if ( data.level >= 30 && data.level < 35 ) {
-            role = 'strong ninja'
-         } else if ( data.level >= 35 && data.level < 40 ) {
-            role = 'kage'
-         } else if ( data.level >= 40 && data.level < 45 ) {
-            role = 'Hermit seinin'
-         } else if ( data.level >= 45 && data.level < 50 ) {
-            role = 'Otsusuki'
-         } else {
-            role = 'level-GOD'
-         }
-    
+        // Role is now directly from data.role
     
          let msg = `
-┏━━━┛ NEXUS-AI rank┗━━━┓
+┏━━━┛ NEXUS-AI Rank ┗━━━┓
      
   *Name :* ${nomAuteurMessage}
 
   *Level :* ${data.level}
 
-  *EXP :* ${data.exp}/${data.xplimit}
+  *Role :* ${data.role}
 
-  *Role :* ${role}
+  *EXP :* ${data.exp} / ${data.xplimit === Infinity ? 'Max' : data.xplimit}
 
-  *Messages :* ${rang.messages}
+  *Messages (in this group) :* ${userStats.messages}
 
    ┕━✿━┑  ┍━✿━┙`
     
@@ -249,49 +257,36 @@ zokou( {
    }, 
    async(dest,zk, commandeOptions)=> {
   
-    const {ms , mybotpic} = commandeOptions ;
+    const {ms , mybotpic, verifGroupe, repondre} = commandeOptions ; // Added verifGroupe and repondre
 
+    if (!verifGroupe) {
+        repondre('This command can only be used in groups.');
+        return;
+    }
 
-       let msg = `┏━━┛ nexus-ai-top-rang ┗━━┓\n\n`
+       let msg = `┏━━┛ NEXUS-AI Top Ranks (Current Group) ┗━━┓\n\n`;
        
-      let topRanks = await getBottom10Users() ;
+      let topUsersInGroup = await getTopUsers(dest, 10) ;
+
+      if (!topUsersInGroup || topUsersInGroup.length === 0) {
+        repondre("No ranked users in this group yet.");
+        return;
+      }
+
         let mention = [] ;
-        for (const rank of topRanks ) {
+        for (const userRankData of topUsersInGroup ) {
 
-             const data = await get_level_exp(rank.xp) ;
+             const levelData = get_level_exp(userRankData.xp) ; // get_level_exp is not async
 
-             let role ;
-    
-         if (data.level < 5) {
-            role = 'Nouveau né(e)'
-         } else if (data.level >= 5 && data.level < 10) {
-            role = 'kid ninja'
-         } else if ( data.level >= 10 && data.level < 15 ) {
-            role = 'Ninja-genin'
-         } else if ( data.level >= 15 && data.level < 20 ) {
-            role = 'Ninja-chunin'
-         } else if ( data.level >= 20 && data.level < 25 ) {
-            role = 'Ninja-jonin'
-         } else if ( data.level >= 25 && data.level < 30 ) {
-            role = 'ANBU'
-         } else if ( data.level >= 30 && data.level < 35 ) {
-            role = 'strong ninja'
-         } else if ( data.level >= 35 && data.level < 40 ) {
-            role = 'kage'
-         } else if ( data.level >= 40 && data.level < 45 ) {
-            role = 'Hermit seinin'
-         } else if ( data.level >= 45 && data.level < 50 ) {
-            role = 'Otsusuki'
-         } else {
-            role = 'level-GOD'
-         }
+            // Role is now directly from levelData.role
             msg += `-----------------------
             
- *Name :* @${rank.jid.split("@")[0]}
-*Level :* ${data.level}
-*Role :* ${role}\n` ;
+ *Name:* @${userRankData.userId.split("@")[0]}
+*Level:* ${levelData.level}
+*Role:* ${levelData.role}
+*Messages:* ${userRankData.messages}\n`; // Added message count for context
 
-        mention.push(rank.jid) ;
+        mention.push(userRankData.userId) ;
         }
 
        zk.sendMessage(dest,
@@ -306,5 +301,62 @@ zokou( {
    })
 
 
-   
-    
+// Admin Commands for Rank Management
+
+zokou({
+    nomCom: 'setxp',
+    categorie: 'Admin',
+    reaction: '📊'
+}, async (dest, zk, commandeOptions) => {
+    const { ms, arg, repondre, superUser, verifGroupe, verifAdmin, msgRepondu, auteurMsgRepondu } = commandeOptions;
+
+    if (!verifGroupe) { return repondre('This command can only be used in groups.'); }
+    if (!verifAdmin && !superUser) { return repondre('This command is for group admins or bot superusers only.'); }
+
+    if (!msgRepondu) { return repondre('Please reply to the message of the user whose XP you want to set.'); }
+    const targetUser = auteurMsgRepondu;
+
+    const amount = parseInt(arg[0]);
+    if (isNaN(amount) || amount < 0) { return repondre('Invalid amount. XP must be a non-negative number. Usage: .setxp <amount>'); }
+
+    await setUserXP(dest, targetUser, amount);
+    repondre(`XP for @${targetUser.split('@')[0]} in this group has been set to ${amount}.`, { mentions: [targetUser] });
+});
+
+zokou({
+    nomCom: 'addxp',
+    categorie: 'Admin',
+    reaction: '➕'
+}, async (dest, zk, commandeOptions) => {
+    const { ms, arg, repondre, superUser, verifGroupe, verifAdmin, msgRepondu, auteurMsgRepondu } = commandeOptions;
+
+    if (!verifGroupe) { return repondre('This command can only be used in groups.'); }
+    if (!verifAdmin && !superUser) { return repondre('This command is for group admins or bot superusers only.'); }
+
+    if (!msgRepondu) { return repondre('Please reply to the message of the user to whom you want to add XP.'); }
+    const targetUser = auteurMsgRepondu;
+
+    const amount = parseInt(arg[0]);
+    if (isNaN(amount)) { return repondre('Invalid amount. XP must be a number. Usage: .addxp <amount>'); }
+
+    await addUserXP(dest, targetUser, amount);
+    const updatedStats = await getUserStats(dest, targetUser); // Fetch updated stats
+    repondre(`${amount} XP added to @${targetUser.split('@')[0]} in this group. New XP: ${updatedStats.xp}.`, { mentions: [targetUser] });
+});
+
+zokou({
+    nomCom: 'resetrank',
+    categorie: 'Admin',
+    reaction: '🔄'
+}, async (dest, zk, commandeOptions) => {
+    const { ms, arg, repondre, superUser, verifGroupe, verifAdmin, msgRepondu, auteurMsgRepondu } = commandeOptions;
+
+    if (!verifGroupe) { return repondre('This command can only be used in groups.'); }
+    if (!verifAdmin && !superUser) { return repondre('This command is for group admins or bot superusers only.'); }
+
+    if (!msgRepondu) { return repondre('Please reply to the message of the user whose rank you want to reset.'); }
+    const targetUser = auteurMsgRepondu;
+
+    await resetUserRank(dest, targetUser);
+    repondre(`Rank for @${targetUser.split('@')[0]} in this group has been reset (XP and messages set to 0).`, { mentions: [targetUser] });
+});
