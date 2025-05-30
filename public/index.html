@@ -1,9 +1,34 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Bot Status</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Pair Site</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+    <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-  <h2>NEXUS-AI connected successfully ✅</h2>
+    <h1>WhatsApp Pairing Service</h1>
+    <div id="pairing-section">
+        <h2>QR Code Pairing</h2>
+        <button id="start-qr-button">Start QR Pairing</button>
+        <div id="qr-code-area"></div>
+        <div id="status-message"></div>
+    </div>
+    <hr>
+    <div id="pair-code-section">
+        <h2>Pair with Phone Number</h2>
+        <input type="text" id="phone-number" placeholder="Enter phone number with country code">
+        <button id="start-pair-code-button">Get Pairing Code</button>
+        <div id="pair-code-instructions"></div>
+    </div>
+    <hr>
+    <div id="session-display-area" style="display:none;">
+        <h2>Pairing Successful!</h2>
+        <p>Copy your session string (prefixed with 'botrelay'):</p>
+        <textarea id="session-string" rows="10" cols="50" readonly></textarea>
+    </div>
+
+    <script src="/js/main.js"></script>
 </body>
 </html>

@@ -1,2 +1,1 @@
-
-web: node pkdriller.js && node pkdriller.js
+web: node server.js

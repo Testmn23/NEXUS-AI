@@ -1,0 +1,4 @@
+/* public/css/style.css */
+body { font-family: sans-serif; margin: 20px; }
+#qr-code-area img { border: 1px solid #ccc; }
+#session-string { width: 100%; }
